@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package pb;
+
+service FileBrowser {
+    rpc getFileSize (FileSizeRequest) returns (FileSizeReply) {}
+    rpc getFiles (FilesRequest) returns (FilesReply) {}
+    rpc recursiveDirectoryTraversal (FilesRequest) returns (stream FileEntry) {}
+}
+
+message FileSizeRequest {
+    bytes filePath = 1;
+}
+
+message FileSizeReply {
+    uint64 fileSize = 1;
+}
+
+message FilesRequest {
+    bytes directory = 1;
+}
+
+message FilesReply {
+   repeated FileEntry fileEntrires = 1;
+}
+
+message FileEntry {
+    bytes filePath = 1;
+    bool isDirectory = 2;
+    uint64 fileSize = 3;
+}
+
+message FileEntryCollection {
+    bytes rootPath = 1;
+    repeated FileEntry fileEntrires = 2;
+}
