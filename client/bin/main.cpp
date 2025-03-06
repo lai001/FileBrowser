@@ -30,12 +30,13 @@ bool loadSystemFont(const float dpiScale)
         const std::filesystem::path fontPath = fontsPath / "msyh.ttc";
         const std::string fontPathStr = fontPath.string();
         spdlog::trace("Loading font, {}", fontPathStr);
-        const ImFont *customFont = io.Fonts->AddFontFromFileTTF(fontPathStr.c_str(), 16.0f * dpiScale);
+        ImFont *customFont = io.Fonts->AddFontFromFileTTF(fontPathStr.c_str(), 16.0f * dpiScale, nullptr,
+                                                          io.Fonts->GetGlyphRangesChineseFull());
         if (nullptr == customFont)
         {
             return false;
         }
-        io.FontDefault = io.Fonts->Fonts[1];
+        io.FontDefault = customFont;
         return true;
     }
 #endif
@@ -94,7 +95,11 @@ int run(int argc, char **argv)
         spdlog::error("Create viewport fail");
         return 1;
     }
-    loadSystemFont(scaleX);
+    const bool isLoadResult = loadSystemFont(scaleX);
+    if (!isLoadResult)
+    {
+        spdlog::warn("Failed to load custom font.");
+    }
     viewport->updateFontsTexture();
     viewport->setContentScale(scaleX);
     glfwSetWindowFocusCallback(window, ImGui_ImplGlfw_WindowFocusCallback);

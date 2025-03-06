@@ -30,6 +30,7 @@ FileBrowserUIController::~FileBrowserUIController()
 
 void FileBrowserUIController::render()
 {
+    ImGui::SetWindowSize("FileBrowser", ImVec2(800, 600), ImGuiCond_FirstUseEver);
     ImGui::Begin("FileBrowser");
     ImGuiInputTextFlags flags = ImGuiInputTextFlags_CallbackResize;
     const bool isChanged = ImGui::InputTextWithHint("CurrentPath", "Type path here",
