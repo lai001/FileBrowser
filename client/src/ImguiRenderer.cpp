@@ -53,7 +53,13 @@ void ImguiRenderer::setContentScale(const float scale)
         ImGuiIO &io = ImGui::GetIO();
         // io.DisplayFramebufferScale = ImVec2(scale, scale);
         // ImGuiIO &io = ImGui::GetIO();
-        //io.FontGlobalScale = scale;
+        // io.FontGlobalScale = scale;
         ImGui::GetStyle().ScaleAllSizes(scale);
     }
+}
+
+void ImguiRenderer::setNewSize(const int width, const int height)
+{
+    renderSurfaceWidth = width;
+    renderSurfaceHeight = height;
 }

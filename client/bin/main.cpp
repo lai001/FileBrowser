@@ -116,7 +116,11 @@ int run(int argc, char **argv)
     while (!glfwWindowShouldClose(window))
     {
         glfwPollEvents();
-
+        int currentWindowWidth;
+        int currentWindowHeight;
+        glfwGetWindowSize(window, &currentWindowWidth, &currentWindowHeight);
+        viewport->setNewSize(currentWindowWidth, currentWindowHeight);
+        renderer->getRenderTarget(MainWindowID)->setNewSize(currentWindowWidth, currentWindowHeight);
         renderer->setCurrentRenderTarget(*renderer->getRenderTarget(MainWindowID));
         const float clearColor[4] = {1.0f, 0.0f, 0.0f, 1.0f};
         renderer->setClearColor(*renderer->getRenderTarget(MainWindowID), clearColor);

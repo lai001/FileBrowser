@@ -17,6 +17,8 @@ class RenderTarget
 
     const Diligent::Win32NativeWindow &getNativeWindow() const;
 
+    void setNewSize(const int width, const int height);
+
   private:
     RenderTarget(const RenderTarget &) = delete;
 

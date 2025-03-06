@@ -47,3 +47,11 @@ void Viewport::setContentScale(const float scale)
         imguiRenderer->setContentScale(scale);
     }
 }
+
+void Viewport::setNewSize(const int width, const int height)
+{
+    if (imguiRenderer)
+    {
+        imguiRenderer->setNewSize(width, height);
+    }
+}

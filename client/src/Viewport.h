@@ -19,6 +19,9 @@ class Viewport
     void updateFontsTexture();
 
     void setContentScale(const float scale);
+
+    void setNewSize(const int width, const int height);
+
   private:
     std::unique_ptr<ImguiRenderer> imguiRenderer;
 };

@@ -19,7 +19,9 @@ class ImguiRenderer
 
     void updateFontsTexture();
 
-    void setContentScale (const float scale);
+    void setContentScale(const float scale);
+
+    void setNewSize(const int width, const int height);
 
   private:
     std::shared_ptr<Diligent::ImGuiImplDiligent> imGuiImplDiligent;

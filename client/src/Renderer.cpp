@@ -53,6 +53,13 @@ bool Renderer::addWindow(const int id, GLFWwindow *window)
     }
 #if PLATFORM_WIN32
     Diligent::Win32NativeWindow nativeWindow{glfwGetWin32Window(window)};
+    Diligent::RefCntAutoPtr<Diligent::ISwapChain> swapChain;
+    Diligent::SwapChainDesc swapChainDesc;
+    int currentWindowWidth;
+    int currentWindowHeight;
+    glfwGetWindowSize(window, &currentWindowWidth, &currentWindowHeight);
+    swapChainDesc.Width = currentWindowWidth;
+    swapChainDesc.Height = currentWindowHeight;
 #else
 #error No support on this platform
 #endif
@@ -64,8 +71,6 @@ bool Renderer::addWindow(const int id, GLFWwindow *window)
         Diligent::IEngineFactoryD3D11 *factoryD3D11 = reinterpret_cast<Diligent::IEngineFactoryD3D11 *>(engineFactory);
         if (factoryD3D11)
         {
-            Diligent::RefCntAutoPtr<Diligent::ISwapChain> swapChain;
-            Diligent::SwapChainDesc swapChainDesc;
             factoryD3D11->CreateSwapChainD3D11(device, immediateContext, swapChainDesc, Diligent::FullScreenModeDesc{},
                                                nativeWindow, &swapChain);
             renderTargets[id] = std::make_unique<RenderTarget>(swapChain, nativeWindow);
@@ -79,8 +84,6 @@ bool Renderer::addWindow(const int id, GLFWwindow *window)
         Diligent::IEngineFactoryD3D12 *factoryD3D12 = reinterpret_cast<Diligent::IEngineFactoryD3D12 *>(engineFactory);
         if (factoryD3D12)
         {
-            Diligent::RefCntAutoPtr<Diligent::ISwapChain> swapChain;
-            Diligent::SwapChainDesc swapChainDesc;
             factoryD3D12->CreateSwapChainD3D12(device, immediateContext, swapChainDesc, Diligent::FullScreenModeDesc{},
                                                nativeWindow, &swapChain);
             renderTargets[id] = std::make_unique<RenderTarget>(swapChain, nativeWindow);
@@ -104,8 +107,6 @@ bool Renderer::addWindow(const int id, GLFWwindow *window)
         Diligent::IEngineFactoryVk *factoryVk = reinterpret_cast<Diligent::IEngineFactoryVk *>(engineFactory);
         if (factoryVk)
         {
-            Diligent::RefCntAutoPtr<Diligent::ISwapChain> swapChain;
-            Diligent::SwapChainDesc swapChainDesc;
             factoryVk->CreateSwapChainVk(device, immediateContext, swapChainDesc, nativeWindow, &swapChain);
             renderTargets[id] = std::make_unique<RenderTarget>(swapChain, nativeWindow);
             return true;
