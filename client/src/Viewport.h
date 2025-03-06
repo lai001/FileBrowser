@@ -16,6 +16,9 @@ class Viewport
 
     void render(Diligent::IDeviceContext &deviceContext);
 
+    void updateFontsTexture();
+
+    void setContentScale(const float scale);
   private:
     std::unique_ptr<ImguiRenderer> imguiRenderer;
 };

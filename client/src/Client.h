@@ -20,7 +20,7 @@ class FileBrowserClient
 
     std::vector<pb::FileEntry> getFiles(const std::string &directory);
 
-    std::unordered_map<std::filesystem::path, DirectoryEntry> recursiveDirectoryTraversal(const std::string &filePath);
+    PathMap recursiveDirectoryTraversal(const std::string &filePath);
 
   private:
     std::unique_ptr<pb::FileBrowser::Stub> stub_;

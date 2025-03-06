@@ -6,6 +6,8 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <filesystem>
+#include "spdlog/spdlog.h"
+#include "Misc.h"
 
 class DirectoryEntry
 {
@@ -20,12 +22,14 @@ class DirectoryEntry
     DirectoryEntry();
 };
 
+using PathMap = std::unordered_map<std::filesystem::path, DirectoryEntry>;
+
 class DirectoryTree
 {
   public:
-    std::unordered_map<std::filesystem::path, DirectoryEntry> directories;
+    PathMap directories;
 
-    DirectoryTree(std::unordered_map<std::filesystem::path, DirectoryEntry> directories);
+    DirectoryTree(PathMap directories);
 
     DirectoryTree();
 

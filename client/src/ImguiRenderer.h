@@ -17,6 +17,10 @@ class ImguiRenderer
 
     void render(Diligent::IDeviceContext &deviceContext);
 
+    void updateFontsTexture();
+
+    void setContentScale (const float scale);
+
   private:
     std::shared_ptr<Diligent::ImGuiImplDiligent> imGuiImplDiligent;
 

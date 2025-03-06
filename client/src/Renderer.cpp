@@ -1,5 +1,6 @@
 #include "Renderer.h"
 #include <memory>
+#include "spdlog/spdlog.h"
 #include "imgui.h"
 #if D3D12_SUPPORTED
 #include "DiligentCore/Graphics/GraphicsEngineD3D12/interface/EngineFactoryD3D12.h"
@@ -26,22 +27,18 @@ Renderer::~Renderer()
 {
 }
 
-Renderer *Renderer::create()
+tl::expected<std::unique_ptr<Renderer>, std::string> Renderer::create()
 {
     const Diligent::RENDER_DEVICE_TYPE deviceType = Diligent::RENDER_DEVICE_TYPE::RENDER_DEVICE_TYPE_D3D11;
-    std::unique_ptr<RendererInitializer> rendererInitializer =
-        std::unique_ptr<RendererInitializer>(RendererInitializer::create(deviceType));
-    if (!rendererInitializer)
-    {
-        return nullptr;
-    }
-
-    Renderer *renderer = new Renderer();
-    renderer->deviceType = deviceType;
-    renderer->device = rendererInitializer->device;
-    renderer->immediateContext = rendererInitializer->immediateContext;
-    renderer->engineFactory = rendererInitializer->engineFactory;
-    return renderer;
+    tl::expected<RendererInitializer, std::string> rendererInitializer = RendererInitializer::create(deviceType);
+    return rendererInitializer.map([deviceType](RendererInitializer &rendererInitializer) {
+        Renderer *renderer = new Renderer();
+        renderer->deviceType = deviceType;
+        renderer->device = rendererInitializer.device;
+        renderer->immediateContext = rendererInitializer.immediateContext;
+        renderer->engineFactory = rendererInitializer.engineFactory;
+        return std::unique_ptr<Renderer>(renderer);
+    });
 }
 
 bool Renderer::addWindow(const int id, GLFWwindow *window)

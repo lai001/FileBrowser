@@ -8,6 +8,7 @@
 #include "DiligentCore/Graphics/GraphicsEngine/interface/RenderDevice.h"
 #include "DiligentCore/Graphics/GraphicsEngine/interface/DeviceContext.h"
 #include "DiligentCore/Graphics/GraphicsEngine/interface/SwapChain.h"
+#include "tl/expected.hpp"
 #include "RenderTarget.h"
 #include "ImguiRenderer.h"
 #include "Viewport.h"
@@ -21,7 +22,7 @@ class Renderer
 
     ~Renderer();
 
-    static Renderer *create();
+    static tl::expected<std::unique_ptr<Renderer>, std::string> create();
 
     bool addWindow(const int id, GLFWwindow *window);
 

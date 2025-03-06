@@ -41,7 +41,7 @@ std::vector<pb::FileEntry> FileBrowserClient::getFiles(const std::string &direct
     }
 }
 
-std::unordered_map<std::filesystem::path, DirectoryEntry> FileBrowserClient::recursiveDirectoryTraversal(
+PathMap FileBrowserClient::recursiveDirectoryTraversal(
     const std::string &filePath)
 {
     pb::FilesRequest request;
@@ -49,7 +49,7 @@ std::unordered_map<std::filesystem::path, DirectoryEntry> FileBrowserClient::rec
     grpc::ClientContext context;
     std::unique_ptr<grpc::ClientReader<pb::FileEntry>> reader(stub_->recursiveDirectoryTraversal(&context, request));
     pb::FileEntry fileEntry;
-    std::unordered_map<std::filesystem::path, DirectoryEntry> directories;
+    PathMap directories;
     while (reader->Read(&fileEntry))
     {
         DirectoryEntry directoryEntry;

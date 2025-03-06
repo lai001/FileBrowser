@@ -15,8 +15,7 @@ std::filesystem::path DirectoryEntry::getParent() const
     return filePath.parent_path();
 }
 
-DirectoryTree::DirectoryTree(std::unordered_map<std::filesystem::path, DirectoryEntry> directories)
-    : rootPath(std::filesystem::path()), directories(directories)
+DirectoryTree::DirectoryTree(PathMap directories) : rootPath(std::filesystem::path()), directories(directories)
 {
     std::unordered_set<std::filesystem::path> rootPaths = findRootPaths();
     if (rootPaths.size() > 1)
@@ -39,8 +38,7 @@ DirectoryTree::DirectoryTree(std::unordered_map<std::filesystem::path, Directory
     fillMissingDirectories();
 }
 
-DirectoryTree::DirectoryTree()
-    : rootPath(std::filesystem::path()), directories(std::unordered_map<std::filesystem::path, DirectoryEntry>())
+DirectoryTree::DirectoryTree() : rootPath(std::filesystem::path()), directories(PathMap())
 {
 }
 
@@ -202,6 +200,7 @@ bool DirectoryTree::calculateDirectorySizeRecursively(const std::filesystem::pat
         output.pop();
         calculateDirectorySize(currentPath);
     }
+    return true;
 }
 
 std::unordered_set<std::filesystem::path> DirectoryTree::findRootPaths()
@@ -216,20 +215,19 @@ std::unordered_set<std::filesystem::path> DirectoryTree::findRootPaths()
 
 void DirectoryTree::fillMissingDirectories()
 {
-    std::unordered_set<std::filesystem::path> missingDirectories;
+    PathSet missingDirectories;
     for (const auto &pair : directories)
     {
-        const std::unordered_set<std::filesystem::path> parentDirectories =
-            misc::getParentDirectories(pair.second.filePath);
-        for (const std::filesystem::path &parent : parentDirectories)
+        const PathSet parentDirectories = misc::getParentDirectories(pair.second.filePath);
+        missingDirectories.insert(parentDirectories.begin(), parentDirectories.end());
+    }
+    for (const std::filesystem::path &dir : missingDirectories)
+    {
+        if (directories.find(dir) != directories.end())
         {
-            if (directories.find(parent) == directories.end())
-            {
-                missingDirectories.insert(parent);
-            }
+            missingDirectories.erase(dir);
         }
     }
-
     for (const std::filesystem::path &missingDirectory : missingDirectories)
     {
         DirectoryEntry entry;

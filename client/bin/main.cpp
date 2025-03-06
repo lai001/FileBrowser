@@ -18,58 +18,73 @@
 
 constexpr static const int MainWindowID = 0;
 
-#if _WIN32
-bool loadSystemFont()
+bool loadSystemFont(const float dpiScale)
 {
+#if _WIN32
     PWSTR pathToFonts;
     if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Fonts, 0, nullptr, &pathToFonts)))
     {
-        std::filesystem::path fontsPath(pathToFonts);
+        const std::filesystem::path fontsPath(pathToFonts);
         CoTaskMemFree(pathToFonts);
         ImGuiIO &io = ImGui::GetIO();
-        std::filesystem::path fontPath = fontsPath / "msyh.ttc";
-        std::string fontPathStr = fontPath.string();
+        const std::filesystem::path fontPath = fontsPath / "msyh.ttc";
+        const std::string fontPathStr = fontPath.string();
         spdlog::trace("Loading font, {}", fontPathStr);
-        io.Fonts->AddFontDefault();
-        ImFont *customFont = io.Fonts->AddFontFromFileTTF(fontPathStr.c_str(), 16.0f);
+        const ImFont *customFont = io.Fonts->AddFontFromFileTTF(fontPathStr.c_str(), 16.0f * dpiScale);
         if (nullptr == customFont)
         {
             return false;
         }
-        unsigned char *texPixels = nullptr;
-        int texWidth, texHeight;
-        io.Fonts->GetTexDataAsRGBA32(&texPixels, &texWidth, &texHeight);
-        spdlog::trace("Loading font done, {}, {}", texWidth, texHeight);
+        io.FontDefault = io.Fonts->Fonts[1];
         return true;
     }
+#endif
     return false;
 }
-#endif
+
+int dumpGlfwError()
+{
+    const char *description;
+    const int errorCode = glfwGetError(&description);
+    if (errorCode != GLFW_NO_ERROR)
+    {
+        spdlog::error("glfw error: {}, {}", errorCode, description);
+    }
+    return errorCode;
+}
 
 int run(int argc, char **argv)
 {
-    std::setlocale(LC_ALL, "en_US.UTF-8");
+    // std::setlocale(LC_ALL, "en_US.UTF-8");
     spdlog::set_level(spdlog::level::trace);
     if (glfwInit() == GLFW_FALSE)
     {
-        spdlog::error("glfwInit fail");
+        return dumpGlfwError();
+    }
+    GLFWmonitor *monitor = glfwGetPrimaryMonitor();
+    if (nullptr == monitor)
+    {
         return 1;
     }
-    const unsigned int windowWidth = 1024;
-    const unsigned int windowHeight = 764;
+
+    float scaleX = 1.0f;
+    float scaleY = 1.0f;
+    glfwGetMonitorContentScale(monitor, &scaleX, &scaleY);
+    const unsigned int windowWidth = 1024 * scaleX;
+    const unsigned int windowHeight = 764 * scaleY;
 
     GLFWwindow *window = glfwCreateWindow(windowWidth, windowHeight, "File Broswer", nullptr, nullptr);
     if (window == nullptr)
     {
-        spdlog::error("glfwCreateWindow fail");
-        return 1;
+        return dumpGlfwError();
     }
-    std::unique_ptr<Renderer> renderer = std::unique_ptr<Renderer>(Renderer::create());
-    if (!renderer)
+    tl::expected<std::unique_ptr<Renderer>, std::string> expectedRenderer = Renderer::create();
+    if (!expectedRenderer)
     {
-        spdlog::error("Create renderer fail");
+        spdlog::error("Create renderer fail, {}", expectedRenderer.error());
         return 1;
     }
+    std::unique_ptr<Renderer> renderer = std::move(expectedRenderer.value());
 
     renderer->addWindow(MainWindowID, window);
     std::unique_ptr<Viewport> viewport =
@@ -79,7 +94,9 @@ int run(int argc, char **argv)
         spdlog::error("Create viewport fail");
         return 1;
     }
-
+    loadSystemFont(scaleX);
+    viewport->updateFontsTexture();
+    viewport->setContentScale(scaleX);
     glfwSetWindowFocusCallback(window, ImGui_ImplGlfw_WindowFocusCallback);
     glfwSetCursorEnterCallback(window, ImGui_ImplGlfw_CursorEnterCallback);
     glfwSetCursorPosCallback(window, ImGui_ImplGlfw_CursorPosCallback);

@@ -20,19 +20,13 @@ RendererInitializer::RendererInitializer() : engineFactory(nullptr)
 {
 }
 
-RendererInitializer *RendererInitializer::create(const Diligent::RENDER_DEVICE_TYPE deviceType)
+tl::expected<RendererInitializer, std::string> RendererInitializer::create(
+    const Diligent::RENDER_DEVICE_TYPE deviceType)
 {
-    RendererInitializer *rendererInitializer = new RendererInitializer();
-    if (rendererInitializer->init(deviceType))
-    {
-        return rendererInitializer;
-    }
-    delete rendererInitializer;
-    return nullptr;
-}
+    Diligent::RefCntAutoPtr<Diligent::IRenderDevice> device;
+    Diligent::RefCntAutoPtr<Diligent::IDeviceContext> immediateContext;
+    Diligent::IEngineFactory *engineFactory = nullptr;
 
-bool RendererInitializer::init(const Diligent::RENDER_DEVICE_TYPE deviceType)
-{
     SwapChainDesc swapChainDesc;
     switch (deviceType)
     {
@@ -90,15 +84,16 @@ bool RendererInitializer::init(const Diligent::RENDER_DEVICE_TYPE deviceType)
 #endif
 
     default:
-        spdlog::error("Unknown/unsupported device type");
-        return false;
+        return tl::unexpected<std::string>("Unknown/unsupported device type");
         break;
     }
-
-    if (device == nullptr || immediateContext == nullptr)
+    if (nullptr == device || nullptr == immediateContext || nullptr == engineFactory)
     {
-        return false;
+        return tl::unexpected<std::string>("Failed to create device or context");
     }
-
-    return true;
+    RendererInitializer rendererInitializer;
+    rendererInitializer.device = device;
+    rendererInitializer.immediateContext = immediateContext;
+    rendererInitializer.engineFactory = engineFactory;
+    return tl::expected<RendererInitializer, std::string>(rendererInitializer);
 }

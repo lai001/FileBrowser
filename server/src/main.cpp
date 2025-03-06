@@ -4,7 +4,7 @@
 int runServer(uint16_t port)
 {
     spdlog::set_level(spdlog::level::trace);
-    std::setlocale(LC_ALL, "en_US.UTF-8");
+    // std::setlocale(LC_ALL, "en_US.UTF-8");
     const std::string server_address = absl::StrFormat("localhost:%d", port);
     FileBrowserServiceImpl service;
     grpc::EnableDefaultHealthCheckService(true);

@@ -31,3 +31,19 @@ void Viewport::render(Diligent::IDeviceContext &deviceContext)
         imguiRenderer->render(deviceContext);
     }
 }
+
+void Viewport::updateFontsTexture()
+{
+    if (imguiRenderer)
+    {
+        imguiRenderer->updateFontsTexture();
+    }
+}
+
+void Viewport::setContentScale(const float scale)
+{
+    if (imguiRenderer)
+    {
+        imguiRenderer->setContentScale(scale);
+    }
+}

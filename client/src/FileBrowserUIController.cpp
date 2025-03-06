@@ -39,8 +39,7 @@ void FileBrowserUIController::render()
     if (ImGui::Button("Scan"))
     {
         spdlog::trace("Click scan button");
-        const std::unordered_map<std::filesystem::path, DirectoryEntry> directories =
-            fileBrowserClient->recursiveDirectoryTraversal(currentPath);
+        const PathMap directories = fileBrowserClient->recursiveDirectoryTraversal(currentPath);
         DirectoryTree *newDirectoryTree = new DirectoryTree(directories);
         newDirectoryTree->rebuildHierarchy();
         newDirectoryTree->recalculateDirectorySize();
@@ -57,12 +56,13 @@ void FileBrowserUIController::render()
             pb::FileEntryCollection fileEntryCollection;
             if (fileEntryCollection.ParseFromIstream(&inputFile))
             {
-                std::unordered_map<std::filesystem::path, DirectoryEntry> directories;
+                PathMap directories;
                 for (const auto &item : fileEntryCollection.fileentrires())
                 {
+                    const std::string filePath = item.filepath();
                     DirectoryEntry directoryEntry;
                     directoryEntry.fileSize = item.filesize();
-                    directoryEntry.filePath = item.filepath();
+                    directoryEntry.filePath = misc::wstringRemoveNullTerminator(misc::utf8ToWstring(filePath));
                     directoryEntry.isDirectory = item.isdirectory();
                     directories[directoryEntry.filePath] = directoryEntry;
                 }
@@ -101,10 +101,10 @@ void FileBrowserUIController::scan(const std::string &rootPath)
 
 void FileBrowserUIController::renderTreeNode(const DirectoryTree &directoryTree, const DirectoryEntry &entry)
 {
-    std::string label = entry.filePath.filename().string();
+    std::string label = entry.filePath.filename().u8string();
     if (label.size() == 0)
     {
-        label = entry.filePath.string();
+        label = entry.filePath.u8string();
     }
     const bool isDirectory = entry.isDirectory;
     const uint64_t fileSize = entry.fileSize;
@@ -117,7 +117,17 @@ void FileBrowserUIController::renderTreeNode(const DirectoryTree &directoryTree,
     }
     if (ImGui::TreeNodeEx(label.c_str(), flag))
     {
+        std::vector<std::filesystem::path> sorted;
+        sorted.reserve(entry.childs.size());
         for (const std::filesystem::path &item : entry.childs)
+        {
+            sorted.push_back(item);
+        }
+        std::sort(sorted.begin(), sorted.end(),
+                  [&directoryTree](const std::filesystem::path &lhs, const std::filesystem::path &rhs) {
+                      return directoryTree.directories.at(lhs).fileSize > directoryTree.directories.at(rhs).fileSize;
+                  });
+        for (const std::filesystem::path &item : sorted)
         {
             renderTreeNode(directoryTree, directoryTree.directories.at(item));
         }

@@ -37,3 +37,23 @@ void ImguiRenderer::render(Diligent::IDeviceContext &deviceContext)
         imGuiImplDiligent->Render(&deviceContext);
     }
 }
+
+void ImguiRenderer::updateFontsTexture()
+{
+    if (imGuiImplDiligent)
+    {
+        imGuiImplDiligent->UpdateFontsTexture();
+    }
+}
+
+void ImguiRenderer::setContentScale(const float scale)
+{
+    if (imGuiImplDiligent)
+    {
+        ImGuiIO &io = ImGui::GetIO();
+        // io.DisplayFramebufferScale = ImVec2(scale, scale);
+        // ImGuiIO &io = ImGui::GetIO();
+        //io.FontGlobalScale = scale;
+        ImGui::GetStyle().ScaleAllSizes(scale);
+    }
+}

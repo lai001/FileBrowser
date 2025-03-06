@@ -13,8 +13,10 @@ int main(int argc, char **argv)
     argv = app.ensure_utf8(argv);
     std::string scanPath = "";
     std::string outputPath = "";
+    int maxDepth = INT32_MAX;
     app.add_option("-i,--input-location", scanPath, "Input location")->check(CLI::ExistingDirectory)->required(true);
     app.add_option("-o,--output-path", outputPath, "Output path")->required(true);
+    app.add_option("-d,--depth", maxDepth, "Depth")->required(false);
     CLI11_PARSE(app, argc, argv);
     spdlog::trace("Scan path: {}", scanPath);
     pb::FileEntryCollection fileEntryCollection;
@@ -31,12 +33,16 @@ int main(int argc, char **argv)
         {
             rootFileEntry->set_filesize(0);
         }
-        rootFileEntry->set_filepath(rootEntry.path().string());
+        rootFileEntry->set_filepath(rootEntry.path().u8string());
         rootFileEntry->set_isdirectory(rootEntry.is_directory());
-
-        for (const auto &entry : std::filesystem::recursive_directory_iterator(
-                 scanPath, std::filesystem::directory_options::skip_permission_denied))
+        auto iter = std::filesystem::recursive_directory_iterator(
+            scanPath, std::filesystem::directory_options::skip_permission_denied);
+        for (const auto &entry : iter)
         {
+            if (iter.depth() > maxDepth)
+            {
+                break;
+            }
             auto fileEntry = fileEntryCollection.add_fileentrires();
             if (!entry.is_directory())
             {
@@ -46,7 +52,7 @@ int main(int argc, char **argv)
             {
                 fileEntry->set_filesize(0);
             }
-            fileEntry->set_filepath(entry.path().string());
+            fileEntry->set_filepath(entry.path().u8string());
             fileEntry->set_isdirectory(entry.is_directory());
         }
     }

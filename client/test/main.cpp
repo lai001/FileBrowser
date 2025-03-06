@@ -48,19 +48,28 @@ TEST(FileEntryCollection, readFromLocalDisk)
     EXPECT_EQ(true, inputFile.is_open());
     EXPECT_EQ(true, fileEntryCollection.ParseFromIstream(&inputFile));
     inputFile.close();
+    PathMap directories;
     for (const auto &item : fileEntryCollection.fileentrires())
     {
         const std::string filePath = item.filepath();
+        DirectoryEntry directoryEntry;
+        directoryEntry.fileSize = item.filesize();
+        directoryEntry.filePath = misc::wstringRemoveNullTerminator(misc::utf8ToWstring(filePath));
+        directoryEntry.isDirectory = item.isdirectory();
+        directories[directoryEntry.filePath] = directoryEntry;
         try
         {
-            const std::filesystem::path path = filePath;
+            // spdlog::trace("{}", filePath);
+            const std::filesystem::path path = misc::wstringRemoveNullTerminator(misc::utf8ToWstring(filePath));
         }
-        catch (const std::exception &e)
+        catch (const std::system_error &e)
         {
-            spdlog::error("{}, {}", filePath, e.what());
-            throw e;
+            throw std::runtime_error(fmt::format("{}, {}", filePath, e.what()));
         }
     }
+    DirectoryTree directoryTree(directories);
+    EXPECT_EQ(true, directoryTree.rebuildHierarchy());
+    EXPECT_EQ(true, directoryTree.recalculateDirectorySize());
     EXPECT_EQ(346136, fileEntryCollection.fileentrires_size());
 }
 
@@ -71,7 +80,7 @@ TEST(FileEntryCollection, rebuildHierarchy)
     EXPECT_EQ(true, inputFile.is_open());
     EXPECT_EQ(true, fileEntryCollection.ParseFromIstream(&inputFile));
     inputFile.close();
-    std::unordered_map<std::filesystem::path, DirectoryEntry> directories;
+    PathMap directories;
     for (const auto &item : fileEntryCollection.fileentrires())
     {
         DirectoryEntry directoryEntry;
@@ -96,7 +105,7 @@ TEST(Path, parent)
 
 TEST(FileEntryCollection, rebuild2)
 {
-    std::unordered_map<std::filesystem::path, DirectoryEntry> directories;
+    PathMap directories;
     {
         DirectoryEntry entry;
         entry.filePath = "/root/bin/bin2";
@@ -134,7 +143,7 @@ TEST(FileEntryCollection, rebuild2)
 
 TEST(FileEntryCollection, rebuild3)
 {
-    std::unordered_map<std::filesystem::path, DirectoryEntry> directories;
+    PathMap directories;
     {
         DirectoryEntry entry;
         entry.filePath = "/ro ot/bin";
@@ -165,7 +174,7 @@ TEST(FileEntryCollection, rebuild3)
 
 TEST(FileEntryCollection, rebuild4)
 {
-    std::unordered_map<std::filesystem::path, DirectoryEntry> directories;
+    PathMap directories;
     {
         DirectoryEntry entry;
         entry.filePath = "D:/Program Files/bin";
@@ -197,7 +206,7 @@ TEST(FileEntryCollection, rebuild4)
 
 TEST(FileEntryCollection, rebuild5)
 {
-    std::unordered_map<std::filesystem::path, DirectoryEntry> directories;
+    PathMap directories;
     {
         DirectoryEntry entry;
         entry.filePath = "D:/Program Files/bin";
@@ -224,8 +233,7 @@ TEST(Misc, formatSize)
 
 TEST(Misc, getParentDirectories)
 {
-    const std::unordered_set<std::filesystem::path> parents =
-        misc::getParentDirectories(std::filesystem::path("D:/Program Files/A/B/C"));
+    const PathSet parents = misc::getParentDirectories(std::filesystem::path("D:/Program Files/A/B/C"));
     EXPECT_EQ(4, parents.size());
     EXPECT_TRUE(parents.find(std::filesystem::path("D:/")) != parents.end());
     EXPECT_TRUE(parents.find(std::filesystem::path("D:/Program Files")) != parents.end());
@@ -236,7 +244,7 @@ TEST(Misc, getParentDirectories)
 
 TEST(Misc, getParentDirectories1)
 {
-    const std::unordered_set<std::filesystem::path> parents = misc::getParentDirectories(std::filesystem::path("D:/"));
+    const PathSet parents = misc::getParentDirectories(std::filesystem::path("D:/"));
     EXPECT_EQ(0, parents.size());
 }
 
