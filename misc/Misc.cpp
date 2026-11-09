@@ -22,13 +22,8 @@ template <> struct hash<std::filesystem::path>
 #endif
 #endif
 
-// struct PathHash
-// {
-//     std::size_t operator()(const std::filesystem::path &p) const noexcept
-//     {
-//         return std::hash<std::string>()(p.string());
-//     }
-// };
+// std::hash<std::filesystem::path> exists in C++17, but the Android/clang standard library above is the one place
+// this project supplies it itself.
 
 namespace misc
 {
@@ -48,6 +43,25 @@ std::string formatSize(const uint64_t size)
         return fmt::format("{:.3f} mb", static_cast<double>(size) / static_cast<double>((1024 * 1024)));
     }
     return fmt::format("{:.3f} gb", static_cast<double>(size) / static_cast<double>((1024 * 1024 * 1024)));
+}
+
+std::string formatDuration(const long long milliseconds)
+{
+    if (milliseconds < 0)
+    {
+        return fmt::format("0 s");
+    }
+    const long long seconds = milliseconds / 1000;
+    if (seconds < 60)
+    {
+        return fmt::format("{} s", seconds);
+    }
+    const long long minutes = seconds / 60;
+    if (minutes < 60)
+    {
+        return fmt::format("{} min {} s", minutes, seconds % 60);
+    }
+    return fmt::format("{} h {} min", minutes / 60, minutes % 60);
 }
 
 bool misc::endsWithZero(const std::string &str)
@@ -150,10 +164,20 @@ std::string removeSuffix(const std::string &str, const std::string &suffix)
 
 std::filesystem::path misc::normalizePath(const std::filesystem::path &messyPath)
 {
+    // Nothing is normalized: a path is compared as it arrived, so a tree key has to stay what the client sent.
+    // lexically_normal() and weakly_canonical() would rewrite it, and canonical has to touch the filesystem.
     return messyPath;
-    // return messyPath.lexically_normal();
-    std::filesystem::path canonicalPath = std::filesystem::weakly_canonical(messyPath);
-    return canonicalPath.make_preferred();
+}
+
+std::string misc::shutdownPipeName(int port)
+{
+    // One instance name per port, so a second server on another port does not collide.
+    // port 0 (a port chosen by the system) falls back to the single shared name.
+    if (port <= 0)
+    {
+        return "\\\\.\\pipe\\FileBrowserServer";
+    }
+    return "\\\\.\\pipe\\FileBrowserServer-" + std::to_string(port);
 }
 
 std::string wStringToString(const std::wstring &wstr)

@@ -5,7 +5,25 @@ package pb;
 service FileBrowser {
     rpc getFileSize (FileSizeRequest) returns (FileSizeReply) {}
     rpc getFiles (FilesRequest) returns (FilesReply) {}
-    rpc recursiveDirectoryTraversal (FilesRequest) returns (stream FileEntry) {}
+    // Every root directory the server can enumerate, sorted: one entry per logical drive on
+    // Windows ("C:\") and "/" on POSIX systems. The values are in the same shape getFiles accepts.
+    rpc getRootDirectories (RootDirectoriesRequest) returns (RootDirectoriesReply) {}
+    // Information about the machine the server process runs on.
+    rpc getSystemInfo (SystemInfoRequest) returns (SystemInfoReply) {}
+    // The traversal, sent as batches. Entries arrive in traversal order, so a parent is always an entry
+    // that was already sent, and the client builds the path from that chain instead of receiving it.
+    rpc recursiveDirectoryTraversal (FilesRequest) returns (stream TraversalBatch) {}
+    // Info about one path (file or directory).
+    rpc getFileInfo (FileInfoRequest) returns (FileEntry) {}
+    // Streaming download: the file content is sent as a sequence of chunks, so large
+    // files never have to be buffered in one message and the transfer can be cancelled.
+    rpc downloadFile (DownloadRequest) returns (stream DownloadChunk) {}
+    // Streaming download of a whole directory, in traversal order: one header message per entry and the
+    // content chunks after it. A directory has a header and no content.
+    rpc downloadDirectory (DownloadDirectoryRequest) returns (stream DownloadItem) {}
+    // Streaming upload: the client sends one header per entry and then its chunks. The first header names
+    // the directory to write into, which is what its parentIndex -1 points at.
+    rpc uploadFiles (stream UploadItem) returns (UploadReply) {}
 }
 
 message FileSizeRequest {
@@ -24,10 +42,188 @@ message FilesReply {
    repeated FileEntry fileEntrires = 1;
 }
 
+message RootDirectoriesRequest {
+}
+
+message RootDirectoriesReply {
+    // Sorted roots. A drive reported as present can still be unreadable (an empty card reader), so
+    // listing one may still fail; that is handled like any other getFiles error.
+    repeated bytes roots = 1;
+}
+
+message SystemInfoRequest {
+}
+
+message SystemInfoReply {
+    // "windows", "linux", "android", "apple" or "unknown", detected at compile time.
+    string platform = 1;
+    // Version reported by the OS: "major.minor.build" on Windows, the uname release field
+    // elsewhere. Empty when the OS does not report it.
+    string osVersion = 2;
+    // Host name of the machine the server process runs on.
+    string hostName = 3;
+    // User the server process runs as; empty when the environment does not carry it.
+    string userName = 4;
+    // Architecture the server binary was built for: "x64", "arm64", "x86" or "unknown".
+    string architecture = 5;
+    // Logical CPU count (std::thread::hardware_concurrency); 0 when the OS does not report it.
+    uint32 logicalCpuCount = 6;
+    // Total physical memory in bytes; 0 when the OS does not report it.
+    uint64 totalPhysicalMemory = 7;
+}
+
+message FileInfoRequest {
+    bytes filePath = 1;
+}
+
 message FileEntry {
     bytes filePath = 1;
     bool isDirectory = 2;
+    // Apparent size. For a directory this is 0: the folder's own record size is not what a user counts.
     uint64 fileSize = 3;
+    // Seconds since 1970-01-01 UTC (0 when the timestamp cannot be read).
+    int64 lastWriteTime = 4;
+    // Bytes the file actually occupies: cluster-aligned allocation, or the run length for compressed and
+    // sparse files. This is the number that explains why a folder with many small files is bigger on disk
+    // than the sum of its sizes. 0 for directories and on platforms where it cannot be read.
+    uint64 allocatedSize = 5;
+    // File reference: the NTFS record number or the POSIX inode. Several paths with the same value are hard
+    // links to one file, so a size total must count that value once, not once per path. 0 when it cannot be
+    // read.
+    uint64 fileIndex = 6;
+}
+
+message TraversalEntry {
+    // The entry's own name, not its path: the parent prefix is the same for every entry of one directory
+    // and was already sent with the parent, so repeating it per entry is what made the scan large.
+    bytes name = 1;
+    // Position of the parent entry in the stream. -1 is the directory the traversal was started on, which
+    // is not itself sent. sint32 rather than int32 because of that -1: a plain int32 encodes a negative
+    // number as a ten byte varint, zigzag makes it one.
+    sint32 parentIndex = 2;
+    bool isDirectory = 3;
+    // The same values as FileEntry, for one entry instead of one message.
+    uint64 fileSize = 4;
+    // Seconds since 1970-01-01 UTC (0 when the timestamp cannot be read).
+    int64 lastWriteTime = 5;
+    // Bytes the file actually occupies. 0 for directories and on platforms where it cannot be read.
+    uint64 allocatedSize = 6;
+    // File reference: the NTFS record number or the POSIX inode. 0 when it cannot be read.
+    uint64 fileIndex = 7;
+}
+
+// A group of entries sent as one message. The size the server batches at is 512: what a batch saves is the
+// gRPC frame per entry (5 bytes, about 640 KB on a 128k entry scan) and one Write() per entry, and
+// compression only has anything to work on once a message is this large.
+message TraversalBatch {
+    repeated TraversalEntry entries = 1;
+}
+
+message DownloadRequest {
+    bytes filePath = 1;
+    // First byte to send; 0 = start of file. The current client asks for the whole content, because it compares
+    // what arrives with what is already on disk before it writes anything, so this is 0; the field still serves a
+    // client that trusts what it received earlier.
+    uint64 offset = 2;
+    // How many bytes to send from offset; 0 = up to the end of the file.
+    uint64 length = 3;
+    // Maximum bytes per chunk; 0 = server default (64 KiB, capped at 1 MiB).
+    uint32 chunkSize = 4;
+}
+
+message DownloadChunk {
+    // Chunk index starting at 0, so the client can detect gaps after a reconnect.
+    uint32 sequence = 1;
+    // Byte offset of data inside the file.
+    uint64 offset = 2;
+    // Number of bytes in data; smaller than chunkSize for the last chunk.
+    uint64 size = 3;
+    bytes data = 4;
+}
+
+message DownloadDirectoryRequest {
+    bytes directory = 1;
+    // Maximum bytes per chunk; 0 = server default (64 KiB, capped at 1 MiB).
+    uint32 chunkSize = 2;
+    // Resume. Entries before this position in the traversal are not sent, and the entry at this position is
+    // read from this byte. The client has to still have the headers from the earlier run, because the parent
+    // chain of an entry sent now can go through an entry that is not sent again. The current client leaves both
+    // at 0: it compares the content of every entry with what is on disk, and a comparison needs the bytes.
+    uint32 startEntryIndex = 3;
+    // Bytes of the entry at startEntryIndex the client already has.
+    uint64 startOffset = 4;
+}
+
+// One message per entry header and one per chunk. The header is always the first message of an entry, and for
+// a directory it is the only one. name / parentIndex / isDirectory / fileSize are repeated on every chunk so
+// that a message can be read on its own; against a 64 KiB chunk that is far under 0.1% of the transfer.
+message DownloadItem {
+    bytes name = 1;
+    // Position of the entry in this stream. -1 is the directory the download was started on, which is not
+    // sent, so the client uses the directory it asked for. Positions count from 0 in traversal order.
+    sint32 parentIndex = 2;
+    bool isDirectory = 3;
+    // The whole file size, not what is left after a resume. 0 for a directory.
+    uint64 fileSize = 4;
+    // Chunk fields; 0 and empty on a header message. sequence counts from 0 within one entry.
+    uint32 sequence = 5;
+    uint64 offset = 6;
+    uint64 size = 7;
+    bytes data = 8;
+}
+
+// One message per upload entry header or per chunk, exactly one of the two set. The chunks of an entry follow
+// its header before the next header, so the server does not have to expect two entries interleaved.
+message UploadItem {
+    UploadHeader header = 1;
+    UploadChunk chunk = 2;
+}
+
+message UploadHeader {
+    bytes name = 1;
+    // Position of the entry in the stream, the same numbering DownloadItem uses. Position 0 is the directory
+    // the files are written into, so it has no parent: its parentIndex is -1.
+    sint32 parentIndex = 2;
+    bool isDirectory = 3;
+    // Bytes the client says it will send; 0 for a directory. The server does not check it against what
+    // actually arrives - a stream that ends early is reported by the counts in UploadReply, not as an error.
+    uint64 fileSize = 4;
+    // Default false: an upload must not silently replace a file that is already there. An existing directory
+    // is not an error, because creating the same directory again is what a second run does.
+    bool overwrite = 5;
+    // Resume from breakpoint: the bytes the server already has for this entry, so the server appends instead of truncating and
+    // the first chunk of the entry has to be at that offset. 0 = the entry is being sent from the start. The file
+    // has to exist with exactly this size; a state that does not match the file is a stale state, and the entry is
+    // rejected instead of quietly rewritten.
+    uint64 resumeFrom = 6;
+    // Sequence the first chunk of a resumed entry carries. It cannot be worked out from resumeFrom: the last chunk
+    // of the interrupted run can be shorter than the chunk size, so the count has to be remembered.
+    uint32 startSequence = 7;
+    // The entry was already completed by an earlier run, so no chunk follows it. The header is still sent, because
+    // the entries after it count their positions against it.
+    bool alreadyComplete = 8;
+}
+
+message UploadChunk {
+    // Counts from 0 within one entry; offset is the byte position inside the entry's content. Both have to
+    // match what the server has already written, because accepting a chunk out of order would produce a file
+    // that is quietly wrong instead of an error.
+    uint32 sequence = 1;
+    uint64 offset = 2;
+    uint64 size = 3;
+    bytes data = 4;
+}
+
+// Delivered only when the whole stream was accepted. A stream that fails on an entry returns an error status
+// instead, so these counts describe a completed upload.
+message UploadReply {
+    uint32 filesWritten = 1;
+    // Only the directories that were not already there.
+    uint32 directoriesCreated = 2;
+    uint64 bytesWritten = 3;
+    // Entries an earlier run had already completed and this run only reported (UploadHeader.alreadyComplete).
+    // They are not in filesWritten: nothing was written for them.
+    uint32 entriesSkipped = 4;
 }
 
 message FileEntryCollection {

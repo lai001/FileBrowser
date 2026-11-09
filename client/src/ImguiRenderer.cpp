@@ -12,6 +12,14 @@ ImguiRenderer::ImguiRenderer(std::shared_ptr<Diligent::ImGuiImplDiligent> imGuiI
 
 ImguiRenderer::~ImguiRenderer()
 {
+    // Diligent's ImGui renderer destructor is empty, so its device objects (pipeline state - which
+    // holds the shaders and the input layout - vertex/index buffers, constant buffer, font texture
+    // view and the shader resource binding) have to be released explicitly here; otherwise they are
+    // still attached to the device when the device is released.
+    if (imGuiImplDiligent)
+    {
+        imGuiImplDiligent->InvalidateDeviceObjects();
+    }
 }
 
 void ImguiRenderer::newFrame()

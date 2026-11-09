@@ -5,8 +5,12 @@
 #if D3D12_SUPPORTED
 #include "DiligentCore/Graphics/GraphicsEngineD3D12/interface/EngineFactoryD3D12.h"
 #endif
+#ifdef _WIN32
+#include <d3d11.h>
+#endif
 #if D3D11_SUPPORTED
 #include "DiligentCore/Graphics/GraphicsEngineD3D11/interface/EngineFactoryD3D11.h"
+#include "DiligentCore/Graphics/GraphicsEngineD3D11/interface/RenderDeviceD3D11.h"
 #endif
 #if GL_SUPPORTED
 #include "DiligentCore/Graphics/GraphicsEngineOpenGL/interface/EngineFactoryOpenGL.h"
@@ -15,7 +19,7 @@
 #include "DiligentCore/Graphics/GraphicsEngineVulkan/interface/EngineFactoryVk.h"
 #endif
 #if PLATFORM_WIN32
-#include "D:/Workspace/Vendor/DiligentEngine/DiligentTools/Imgui/interface/ImGuiImplWin32.hpp"
+#include "DiligentTools/Imgui/interface/ImGuiImplDiligent.hpp"
 #endif
 #include "RendererInitializer.h"
 
@@ -25,6 +29,46 @@ Renderer::Renderer() : engineFactory(nullptr), deviceType(Diligent::RENDER_DEVIC
 
 Renderer::~Renderer()
 {
+    // Release everything that can reference the device before the device itself, so that the
+    // report below lists exactly the objects that are still attached to the device.
+    renderTargets.clear();
+
+    // The immediate context still references the views bound during the last frame, and those
+    // references keep the swap chain back buffers - and the swap chain itself - alive.
+    // InvalidateState (the interface-level equivalent of ID3D11DeviceContext::ClearState) followed
+    // by Flush realizes the destruction of those objects, so the report below only lists objects
+    // that were really leaked.
+    if (immediateContext)
+    {
+        immediateContext->InvalidateState();
+        immediateContext->Flush();
+    }
+    immediateContext.Release();
+
+#if defined(_WIN32) && D3D11_SUPPORTED
+    // With the D3D11 debug layer enabled, releasing the device while objects are still attached
+    // to it crashes inside ID3D11Device::Release(). Reporting the live objects first turns that
+    // crash into a readable list; if nothing is reported, nothing leaked.
+    if (device)
+    {
+        Diligent::IRenderDeviceD3D11 *d3d11Device = nullptr;
+        device->QueryInterface(Diligent::IID_RenderDeviceD3D11, reinterpret_cast<Diligent::IObject **>(&d3d11Device));
+        if (d3d11Device != nullptr)
+        {
+            ID3D11Debug *debugLayer = nullptr;
+            const HRESULT hr = d3d11Device->GetD3D11Device()->QueryInterface(__uuidof(ID3D11Debug),
+                                                                             reinterpret_cast<void **>(&debugLayer));
+            if (SUCCEEDED(hr) && debugLayer != nullptr)
+            {
+                debugLayer->ReportLiveDeviceObjects(D3D11_RLDO_DETAIL);
+                debugLayer->Release();
+            }
+            d3d11Device->Release();
+        }
+    }
+#endif
+
+    device.Release();
 }
 
 tl::expected<std::unique_ptr<Renderer>, std::string> Renderer::create()
@@ -133,10 +177,13 @@ ImguiRenderer *Renderer::createImguiRenderer(RenderTarget &renderTarget, unsigne
     {
         return nullptr;
     }
-    HWND hwnd = reinterpret_cast<HWND>(nativeWindow.hWnd);
-    std::shared_ptr<Diligent::ImGuiImplWin32> imGuiImplWin32 =
-        std::move(Diligent::ImGuiImplWin32::Create(Diligent::ImGuiDiligentCreateInfo{device, swapChainDesc}, hwnd));
-    ImguiRenderer *imguiRenderer = new ImguiRenderer(imGuiImplWin32, renderSurfaceWidth, renderSurfaceHeight);
+    // Renderer backend only: the platform (input) backend is GLFW, initialized in main().
+    // ImGuiImplWin32 is a platform+render combo; using it here would install a second platform
+    // backend over the GLFW one, and its input only works when the app pumps the Win32 message
+    // queue itself instead of glfwPollEvents().
+    std::shared_ptr<Diligent::ImGuiImplDiligent> imGuiImplDiligent =
+        std::make_shared<Diligent::ImGuiImplDiligent>(Diligent::ImGuiDiligentCreateInfo{device, swapChainDesc});
+    ImguiRenderer *imguiRenderer = new ImguiRenderer(imGuiImplDiligent, renderSurfaceWidth, renderSurfaceHeight);
     return imguiRenderer;
 }
 
